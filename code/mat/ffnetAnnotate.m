@@ -12,7 +12,6 @@ function ffnetAnnotate(fxy)
 %
 % to-do updates:
 % -possibility to remove clicks
-% -possibility to enter frame number
 % -possibility to move to frame corresponding to n>0  time series
 %
 % RS, 2023
@@ -23,7 +22,7 @@ persistent fxyArray
 persistent fxyName
 
 %fxyName = 'fxy_f1705gp1'
-fxyName = 'fxy_f1601gp1'
+%fxyName = 'bxy_f1601gp1'
 
 % Load video file
 [videoFile, path] = uigetfile({'*.avi;*.mp4;*.mov'}, 'Select a video file');
@@ -32,7 +31,8 @@ videoReader = VideoReader(fullfile(path, videoFile));
 % Create a GUI
 fig = figure('Name', 'Annotate firefly flashes by clicking on them', ...
     'units', 'normalized', ...
-    'outerposition', [0 0 1 1], 'Toolbar', 'none', 'Menubar', 'none');
+    'outerposition', [0 0 1 1], 'Toolbar', 'none', 'Menubar', 'none', ...
+    'WindowKeyPressFcn', @keyPress);
 ax = axes(fig, 'Position', [0.1, 0.25, 0.8, 0.7], 'ButtonDownFcn', @clickAnnotate);
 
 % Add UI controls
@@ -54,18 +54,54 @@ end
 
 % Display the first frame
 currentFrame = read(videoReader, currentFrameNumber);
-imagesc(ax, rgb2gray(currentFrame));
+imagesc(ax, rgb2gray(currentFrame)); 
+axis equal
 set(ax, 'XTick', [], 'YTick', []);
 
 % Add text above slider to indicate current frame number
 uicontrol('Style', 'text', 'String', sprintf('Current Frame: %d', currentFrameNumber), ...
     'Position', [20, 50, 200, 20]);
 
+
+% Add frame number input box
+frameInputBox = uicontrol('Style', 'edit', 'Position', [580, 20, 80, 20], ...
+    'String', '', 'Callback', @frameInputCallback);
+
+% Add 'Go To Frame' button
+goToFrameButton = uicontrol('Style', 'pushbutton', 'String', 'Go To Frame', ...
+    'Position', [670, 20, 100, 20], 'Callback', @goToFrame);
+
+% Callback for the Go To Frame button
+    function goToFrame(~, ~)
+        % Get the frame number from the edit box
+        frameNumStr = get(frameInputBox, 'String');
+        frameNum = str2double(frameNumStr);
+
+        % Validate the input
+        if isnan(frameNum) || frameNum < 1 || frameNum > videoReader.NumFrames
+            errordlg('Please enter a valid frame number within the video range.', ...
+                'Invalid Frame Number');
+            return;
+        end
+
+        % Update current frame number and GUI
+        currentFrameNumber = round(frameNum);
+        slider.Value = currentFrameNumber; % Update the slider
+        updateFrame(slider); % Display the specified frame
+    end
+
+% Callback to handle typing in frame number directly
+    function frameInputCallback(~, ~)
+        % Optional: can include additional validation on input change here
+    end
+
+
 % UI control callbacks
     function updateFrame(source, ~)
         currentFrameNumber = round(source.Value);
         currentFrame = read(videoReader, currentFrameNumber);
-        h = imagesc(ax, rgb2gray(currentFrame));
+        h = imagesc(ax, rgb2gray(currentFrame)); 
+        axis equal
 
         set(ax, 'XTick', [], 'YTick', []);
         set(h, 'ButtonDownFcn', @clickAnnotate);
@@ -97,6 +133,20 @@ uicontrol('Style', 'text', 'String', sprintf('Current Frame: %d', currentFrameNu
         currentFrameNumber = max(currentFrameNumber - 1, 1);
         slider.Value = currentFrameNumber;
         updateFrame(slider);
+    end
+
+    % Key press callback for arrow keys and x, z
+    function keyPress(~, event)
+        switch event.Key
+            case 'rightarrow' % Right arrow key
+                nextFrame();
+            case 'leftarrow' % Left arrow key
+                prevFrame();
+            case 'x' % X key for forward
+                nextFrame();
+            case 'z' % Z key for backward
+                prevFrame();
+        end
     end
 
 % Annotate flash location with a click
